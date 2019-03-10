@@ -7,9 +7,66 @@ import math
 import os
 import re
 import sys
-import Queue
 import collections
 
+# Result of a single graph component
+class Result(object):
+    def __init__(self, sum, combinations):
+        self.sum = sum
+        self.combinations = combinations
+
+# Graph component holding number of nodes and an arbitrary node
+class Component(object):
+    def __init__(self, size, start):
+        self.size = size
+        self.start = start
+
+    def __str__(self):
+        return str(self.size) + ', ' + str(self.start)
+
+# Breaks a graph into connected components
+class Componentizer(object):
+
+    def __init__(self, adjacency, num_nodes):
+        self.adjacency = adjacency
+        self.num_nodes = num_nodes
+        self.visited = [ False for _ in range(num_nodes+1) ]
+        self.components = []
+
+    def componentize(self):  
+        cur_node = 1
+        num_visited = 0
+        while True:
+            counter = ComponentDfsNodeCount(self.adjacency, self.visited, cur_node)
+            self.components.append(Component(counter.count, cur_node))
+            num_visited += counter.count
+            if num_visited == self.num_nodes:
+                break
+          
+            # find the next starting point
+            while cur_node < self.num_nodes and self.visited[cur_node]:
+                cur_node += 1
+
+        return self.components
+
+# Performs DFS to count nodes in a graph component
+class ComponentDfsNodeCount(object):
+
+    def __init__(self, adjacency, visited, start):
+        self.adjacency = adjacency
+        self.visited = visited
+        self.count = 0
+        self.dfs(start)
+
+    def dfs(self, node):    
+        if self.visited[node]:
+            return
+        self.visited[node] = True
+        self.count += 1
+        for child in self.adjacency[node]:
+            self.dfs(child)
+
+# compact representation of an array of booleans
 class BitVector(object):
     def __init__(self):
         self._mask = 0
@@ -32,28 +89,19 @@ class BitVector(object):
 class ConnectedComponent(object):
 
     # constructor. Inits adjacency and visited list. Triggers traversal.
-    def __init__(self, money, edges):
+    def __init__(self, money, adjacency, component):
 
-        # 0-based. Index is one less than node number
         self.money = money
-
-        # adjacency list
-        self.adjacency = [ [] for _ in range(len(money) + 1)]
-
-        # undirected graph - add edge both ways
-        for e in edges:
-            self.adjacency[e[0]].append(e[1])
-            self.adjacency[e[1]].append(e[0])
-
-        self.visited = [ False for _ in range(n+1)]
+        self.adjacency = adjacency
+        self.num_nodes = component.size
+        self.visited = [ False for _ in range(len(money)+1)]
         #  included or not in the money sum
         self.included = BitVector()
-        self.numVisited = 0
-        self.curSum = 0
+        self.num_visited = 0
+        self.cur_sum = 0
 
-        self.Result = collections.namedtuple('Result', 'sum combinations')
-        self.result = self.Result(sum=0, combinations=set())
-        self._process(1)
+        self.result = Result(0, set())
+        self._process(component.start)
 
     def _process(self, node):
         
@@ -62,17 +110,17 @@ class ConnectedComponent(object):
             return
 
         # first, attempt to include the node 
-        canAddNode = self._superhero_present(node)
+        can_add_node = self._superhero_present(node)
         
-        self._visit(node, canAddNode)
+        self._visit(node, can_add_node)
 
         # visit children recursively
         for child in self.adjacency[node]:
             self._process(child)   
 
         # now repeat while excluding the node, if not already done 
-        if canAddNode:            
-            self.include(node, False)
+        if can_add_node:            
+            self._include(node, False)
             # visit children again with node unselected
             for child in self.adjacency[node]:
                 self._process(child)   
@@ -80,31 +128,27 @@ class ConnectedComponent(object):
         # pop the node off the stack allowing parent to re-iterate
         self._unvisit(node)
 
-    def _visit(self, node, doAdd):
-        self.numVisited += 1
+    def _visit(self, node, add):
+        self.num_visited += 1
         self.visited[node] = True
-        if doAdd:
-            self.include(node, True)
+        if add:
+            self._include(node, True)
 
         # if traversed all nodes check the sum
-        if self.numVisited == len(self.money) and self.curSum >= self.result.sum:  
-            
+        if self.num_visited == self.num_nodes and self.cur_sum >= self.result.sum:  
             # reuse set if same result otherwise abandon and create a new set
-            _new_combinations = self.result.combinations 
-                if self.curSum == self.result.sum 
-                else set()
-            
-            _new_combinations.add(self.included.to_int())
-            self.result = self.Result(sum=self.curSum, combinations=_new_combinations)
+            new_combinations = self.result.combinations if self.cur_sum == self.result.sum else set()
+            new_combinations.add(self.included.to_int())
+            self.result = Result(self.cur_sum, new_combinations)
 
     def _unvisit(self, node):
-        self.numVisited -= 1                
+        self.num_visited -= 1                
         self.visited[node] = False
 
-    def include(self, node, doInclude):    
-        sign = 1 if doInclude else -1 
-        self.curSum += sign * self.money[node - 1]
-        if doInclude:
+    def _include(self, node, include):    
+        sign = 1 if include else -1 
+        self.cur_sum += sign * self.money[node - 1]
+        if include:
             self.included.set(node)
         else:
             self.included.unset(node)
@@ -116,6 +160,33 @@ class ConnectedComponent(object):
             if self.included.test(child):
                 return False
         return True
+
+class Solution(object):
+    def __init__(self, money, edges):
+
+        num_nodes = len(money)
+        # adjacency list
+        self.adjacency = [ [] for _ in range(num_nodes + 1)]
+
+        # undirected graph - add edge both ways
+        for e in edges:
+            self.adjacency[e[0]].append(e[1])
+            self.adjacency[e[1]].append(e[0])
+
+        componentizer = Componentizer(self.adjacency, num_nodes)
+        components = componentizer.componentize()
+        for c in components:
+            print str(c)
+
+        total_sum = 0
+        num_ways = 1
+        for c in components:
+            comp = ConnectedComponent(money, self.adjacency, c)
+            print comp.result.sum
+            total_sum += comp.result.sum
+            num_ways *= len(comp.result.combinations)
+
+        print total_sum , num_ways
 
 # main entry point
 if __name__ == '__main__':
@@ -133,7 +204,7 @@ if __name__ == '__main__':
     for _ in xrange(m):
         roads.append(map(int, raw_input().rstrip().split()))
 
-    sol = ConnectedComponent(money, roads)
+    sol = Solution(money, roads)
 
-    print sol.result.sum , len(sol.result.combinations)
+    
 
