@@ -27,6 +27,27 @@ class Result(object):
         self.sum = sum
         self.combinations = combinations
 
+# An edge holding low/high ordinal nodes and a mask combining them
+class Edge(object):
+
+    def __init__(self, node1, node2):
+        self.mask = 1<<node1 | 1<<node2
+        if node1 > node2:
+            node1, node2 = node2, node1
+        self.low_node = node1
+        self.high_node = node2
+        self.low_node_mask = 1 << node1
+
+    # edges with smaller mask come first 
+    def __cmp__(self, other):
+        return self.mask - other.mask
+
+    def __str__(self):        
+        return str(self.high_node) + ' ' + str(self.low_node)
+
+    def __repr__(self):        
+        return str(self.high_node) + ' ' + str(self.low_node)
+
 # Graph component holding sorted list of nodes
 class Component(object):
     def __init__(self, nodes):
@@ -91,7 +112,7 @@ class ComponentDfsTraversal(object):
 class ConnectedComponent(object):
 
     # constructor. Inits adjacency and visited list. Triggers traversal.
-    def __init__(self, money, edge_masks, component):
+    def __init__(self, money, edge_mask_objs, component):
 
         self.component = component
         self.money = money
@@ -100,22 +121,46 @@ class ConnectedComponent(object):
 
         # try every node inclusion combination using a bit mask
         # the mask corresponds to positions of nodes in their component
-        for short_mask in range(0, 1 << len(component.nodes)):   
+        short_mask = 0
+        num_nodes = len(component.nodes)
+        for short_mask in range(0, 1 << num_nodes):   
 
             if short_mask % 300000 == 0:
-                print "Processed 300K ", short_mask / 300000
+                print "Processed ", short_mask 
 
             # bits in the short mask correspond to node positions in
             # the component, whereas we need node positions in the
             # whole graph to match the indices in the edges list and
             # also to index into the money array
-            included = self._calc_mask(short_mask)
+            included = self._calc_long_mask(short_mask)
             valid_combination = True
-            for mask in edge_masks:
+            for edge in edge_mask_objs:
+                # check if there is any possibility of overlap
+                # edge masks are sorted, so we can skip the rest
+                # if (edge.low_node_mask > included):
+                #     break
+
                 # check if both ends of an edge are included
-                if (mask & included) ^ mask == 0:
+                if (edge.mask & included) ^ edge.mask == 0:
                     valid_combination = False
+
+                    # two cases
+                    # if we hit combination 01001000
+                    # then skip all up to   01001111
+                    # and continue at       01010000 
+                    # OR if we hit combination 0011100
+                    # then skip all up to      0011111
+                    # and continue at          0100000
+                    # In both cases, set all lower bits up
+                    # to the low_node and then add 1 later
+
+                    # if included > 10000:
+                    #     for pos in range(edge.low_node):
+                    #         included |= (1 << pos)
+
+                    #     short_mask = self._calc_short_mask(included)                        
                     break
+            
             # all edge masks pass
             if valid_combination:
                 sum = self._calculate_sum(included, money)
@@ -124,10 +169,21 @@ class ConnectedComponent(object):
                     new_combinations = result.combinations if sum == result.sum else set()
                     new_combinations.add(included)
                     result = Result(sum, new_combinations)
-        
+
+            # add 1 in all cases        
+            # short_mask += 1
+
         self.result = result    
 
-    def _calc_mask(self, short_mask):
+    def _calc_short_mask(self, long_mask):
+        short_mask = 0
+        for i in range(len(self.component.nodes)):
+            if long_mask & (1 << self.component.nodes[i]):
+                short_mask |= (1 << i)
+
+        return short_mask
+
+    def _calc_long_mask(self, short_mask):
         long_mask = 0
         pos = 0
         while short_mask != 0:
@@ -172,7 +228,11 @@ class Solution(object):
         # bit mask for each pair of nodes joined by an edge
         edge_masks = []
         for e in edges:
-            edge_masks.append(1<<e[0] | 1<< e[1])
+            edge_masks.append(Edge(e[0], e[1]))
+
+        # smaller masks first as their bits change more 
+        # often while iterating over all combinations
+        edge_masks.sort()    
 
         total_sum = 0
         num_ways = 1
