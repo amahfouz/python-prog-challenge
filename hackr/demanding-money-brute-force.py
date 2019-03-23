@@ -3,6 +3,10 @@
 # Brute force solution for 
 #    https://www.hackerrank.com/challenges/borrowing-money/problem
 
+# A more efficient solution:
+# https://www.hackerrank.com/rest/contests/master/challenges/borrowing-money/hackers/ivanbessonov/download_solution?primary=true
+# 
+
 import math
 import os
 import re
@@ -40,7 +44,7 @@ class Edge(object):
 
     # edges with smaller mask come first 
     def __cmp__(self, other):
-        return self.mask - other.mask
+        return other.mask - self.mask
 
     def __str__(self):        
         return str(self.high_node) + ' ' + str(self.low_node)
@@ -123,10 +127,10 @@ class ConnectedComponent(object):
         # the mask corresponds to positions of nodes in their component
         short_mask = 0
         num_nodes = len(component.nodes)
-        for short_mask in range(0, 1 << num_nodes):   
+        for short_mask in reversed(range(1 << num_nodes)):   
 
-            if short_mask % 300000 == 0:
-                print "Processed ", short_mask 
+            # if short_mask % 300000 == 0:
+            #     print "Processed ", short_mask 
 
             # bits in the short mask correspond to node positions in
             # the component, whereas we need node positions in the
@@ -223,7 +227,7 @@ class Solution(object):
         componentizer = Componentizer(self.adjacency)
         components = componentizer.componentize()
 
-        print "Num components = ", len(components)
+        # print "Num components = ", len(components)
         
         # bit mask for each pair of nodes joined by an edge
         edge_masks = []
@@ -238,7 +242,7 @@ class Solution(object):
         num_ways = 1
         for i in range(len(components)):
             c = components[i]
-            print "Processing component ", i, " whose size is ", c.size()
+            # print "Processing component ", i, " whose size is ", c.size()
             comp = ConnectedComponent(money, edge_masks, c)
             total_sum += comp.result.sum
             num_ways *= len(comp.result.combinations)
