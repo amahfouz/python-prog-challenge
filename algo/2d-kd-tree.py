@@ -5,6 +5,7 @@ import os
 import random
 import re
 import sys
+import copy
 
 # Implementation of a 2-D k-D tree
 
@@ -14,19 +15,57 @@ class Point:
         self.y = y
         self.data = data
 
-    def in_range(self, origin, dx, dy):
-        return (self.x <= origin.x + dx) and (self.y <= origin.y + dy)
+    def in_rect(self, rect):
+        return (self.x >= rect.xmin) and (self.x <= rect.xmax) \
+           and (self.y >= rect.ymin) and (self.y <= rect.ymax)
 
     def __repr__(self):
         return '(' + str(self.x) + ', ' + str(self.y) + ')'
+
+class Rect(object):
+    def __init__(self, xmin, xmax, ymin, ymax):
+        self.xmin = xmin
+        self.xmax = xmax
+        self.ymin = ymin
+        self.ymax = ymax
+
+    def intersects(self, other):
+        if (self.xmax < other.xmin) or (other.xmax < self.xmin) or \
+           (self.ymax < other.ymin) or (other.ymax < self.ymin):
+           return False
+        return True 
+
+    @staticmethod
+    def inc_min(original, dim, value):
+        rect = copy.copy(original)
+        attr = dim + "min"
+        setattr(rect, attr, max(value, getattr(rect, attr)))
+        return rect
+
+    @staticmethod
+    def dec_max(original, dim, value):
+        rect = copy.copy(original)
+        attr = dim + "max"
+        setattr(rect, attr, min(value, getattr(rect, attr)))
+        return rect
+                
+    def __repr__(self):
+        return '[ (' + str(self.xmin) +', ' + str(self.ymin) + ') (' + str(self.xmax) + ', ' + str(self.ymax) + ') ]'
+
+    @staticmethod
+    def all_plane():
+        inf = float("inf")
+        ninf = float("-inf")
+        return Rect(ninf, inf, ninf, inf)        
 
 class Node(object):
     def __init__(self, point):
         self.point = point
         self.left = None
         self.right = None 
+        self.rect = None
 
-    def is_leaf():
+    def is_leaf(self):
         return self.left is None and self.right is None
 
     @staticmethod
@@ -35,7 +74,7 @@ class Node(object):
             print ' ' * 2 * indent, "NULL"
             return
 
-        print ' ' * 2 * indent, str(node.point)
+        print ' ' * 2 * indent, str(node.point), str(node.rect)
         Node.debug(node.left, indent + 1)
         Node.debug(node.right, indent + 1)
 
@@ -44,6 +83,8 @@ class TwoDTree:
         self.root = None
         for p in points:
             self.root = self._insert(p, self.root, 0)
+
+        self._set_ranges()
         
     def debug(self):
         if self.root is None:
@@ -55,52 +96,85 @@ class TwoDTree:
         if parent is None:
             return Node(point)
 
-        dim = "x" if level % 2 == 0 else "y"
+        axis = self._axis_for_level(level)
 
-        side = "left" if getattr(point, dim) < getattr(parent.point, dim) else "right"
+        side = "left" if getattr(point, axis) < getattr(parent.point, axis) else "right"
         next_parent = getattr(parent, side)
         inserted = self._insert(point, next_parent, level + 1)
         setattr(parent, side, inserted)
         return parent
 
-    # finds nodes whose x and y are withing no more 
-    # than dx and dy from the specified point
-    # class RangeSearch:
-    #     def __init__(self, tree, point, callback, dx, dy):
-    #         self.tree = tree
-    #         self.point = point
-    #         self.callback = callback
-    #         self.dx = dx
-    #         self.dy = dy
+    def _set_ranges(self):
+        if self.root is None:
+            return
+        self._set_range(self.root, Rect.all_plane(), 0)
 
-    #     # searches for nodes less than or equal the upper bound point
-    #     # reports results in the specified queue
-    #     def find(self):
-    #         self._bfs(self.tree.root)
+    # recurses down the tree setting ranges of nodes
+    def _set_range(self, node, rect, level):
+        node.rect = rect
+        axis = self._axis_for_level(level)
 
-    #     def _bfs(self, node):
-    #         if node is None:
-    #             return
+        if not node.left is None:
+            new_max = getattr(node.point, axis)
+            new_rect = Rect.dec_max(rect, axis, new_max)
+            self._set_range(node.left, new_rect, level+1)
+        
+        if not node.right is None:
+            new_min = getattr(node.point, axis)
+            new_rect = Rect.inc_min(rect, axis, new_min)
+            self._set_range(node.right, new_rect, level+1)
 
-    #         fully_contained = node.point.in_range(self.point, self.dx, self.dy)
-    #         if node.is_leaf() and fully_contained:
-    #             self._report(node)
-            
+    def _axis_for_level(self, level):
+        return "x" if level % 2 == 0 else "y"
 
-    #     def _report(self, node):
-    #         self.callback(*[node])
+# finds nodes whose x and y are withing 
+# the specified rect
+class RangeSearch:
+    def __init__(self, tree, rect, callback):
+        self.tree = tree
+        self.rect = rect
+        self.callback = callback
 
-    #     def _report_all(self, node):
-    #         if node is None:
-    #             return
-    #         self._report(node)
-    #         self._report_all(node.left)
-    #         self._report_all(node.right)
+    # searches for nodes in the given rect
+    # reports results in the specified queue
+    def find(self):
+        self._dfs(self.tree.root)
+
+    def _dfs(self, node):
+        if node is None:
+            return
+
+        if node.point.in_rect(self.rect):
+            self._report(node)  
+            self._dfs(node.left)
+            self._dfs(node.right)
+
+        else:
+            if node.left and node.left.rect.intersects(self.rect):
+                self._dfs(node.left)
+
+            if node.right and node.right.rect.intersects(self.rect):
+                self._dfs(node.right)
+
+    def _report(self, node):
+        self.callback(*[node])
+
+    def _report_all(self, node):
+        if node is None:
+            return
+        self._report(node)
+        self._report_all(node.left)
+        self._report_all(node.right)
 
         
-
+def _callback(param):
+    print str(param.point)
 
 if __name__ == '__main__':
     points = [Point(1, 2, 0), Point(4, 2, 0), Point(3, 5, 0), Point(4, 0, 0), Point(0, 7, 0), Point(2, 6, 0)]
     tree = TwoDTree(points) 
     tree.debug()
+    rect = Rect(0, 4, 0, 0)
+    search = RangeSearch(tree, rect, _callback)
+    search.find()
+    
