@@ -7,8 +7,9 @@ import re
 import sys
 import copy
 
-# Implementation of a 2-D k-D tree
+# Implementation of a 2-D k-D tree and range search
 
+# A point in a 2D plane
 class Point:
     def __init__(self, x, y, data):
         self.x = x
@@ -22,6 +23,7 @@ class Point:
     def __repr__(self):
         return '(' + str(self.x) + ', ' + str(self.y) + ')'
 
+# A rectangle in a 2D plane
 class Rect(object):
     def __init__(self, xmin, xmax, ymin, ymax):
         self.xmin = xmin
@@ -50,7 +52,8 @@ class Rect(object):
         return rect
                 
     def __repr__(self):
-        return '[ (' + str(self.xmin) +', ' + str(self.ymin) + ') (' + str(self.xmax) + ', ' + str(self.ymax) + ') ]'
+        return '[ (' + str(self.xmin) + ', ' + str(self.ymin) + ')' \
+                +'(' + str(self.xmax) + ', ' + str(self.ymax) + ') ]'
 
     @staticmethod
     def all_plane():
@@ -58,6 +61,8 @@ class Rect(object):
         ninf = float("-inf")
         return Rect(ninf, inf, ninf, inf)        
 
+# Tree node holding a point and a rectangular 
+# range specified by this node
 class Node(object):
     def __init__(self, point):
         self.point = point
@@ -78,12 +83,16 @@ class Node(object):
         Node.debug(node.left, indent + 1)
         Node.debug(node.right, indent + 1)
 
+# 2-D K-D tree implementation
 class TwoDTree:
     def __init__(self, points):
         self.root = None
+
+        # nodes inserted here only
         for p in points:
             self.root = self._insert(p, self.root, 0)
 
+        # now the tree is fixed so compute ranges
         self._set_ranges()
         
     def debug(self):
@@ -128,7 +137,8 @@ class TwoDTree:
         return "x" if level % 2 == 0 else "y"
 
 # finds nodes whose x and y are withing 
-# the specified rect
+# the specified rect and pass them to
+# the specified callback function
 class RangeSearch:
     def __init__(self, tree, rect, callback):
         self.tree = tree
@@ -158,15 +168,8 @@ class RangeSearch:
 
     def _report(self, node):
         self.callback(*[node])
-
-    def _report_all(self, node):
-        if node is None:
-            return
-        self._report(node)
-        self._report_all(node.left)
-        self._report_all(node.right)
-
         
+# For testing        
 def _callback(param):
     print str(param.point)
 
