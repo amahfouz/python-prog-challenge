@@ -57,6 +57,7 @@ class Node(object):
         self.y = y
         self.z = z
         self.value = value
+        self.visited = False
         self.left = None
         self.right = None 
         self.rect = None
@@ -74,13 +75,14 @@ class Node(object):
 
     @staticmethod
     def debug(node, indent):
-        if node is None:
-            print ' ' * 2 * indent, "NULL"
-            return
+        return
+        # if node is None:
+        #     print ' ' * 2 * indent, "NULL"
+        #     return
 
-        print ' ' * 2 * indent, '(' + str(node.x) + ', ' + str(node.y) + ')', str(node.rect)
-        Node.debug(node.left, indent + 1)
-        Node.debug(node.right, indent + 1)
+        # print ' ' * 2 * indent, '(' + str(node.x) + ', ' + str(node.y) + ')', str(node.rect)
+        # Node.debug(node.left, indent + 1)
+        # Node.debug(node.right, indent + 1)
 
 # 2-D K-D tree implementation
 class TwoDTree:
@@ -196,8 +198,10 @@ class Solution(object):
 
 
     def _compute_best(self, node):
-        if not node.best is None:
+        if node.visited or not node.best is None:
             return
+
+        node.visited = True
 
         rect = Rect(node.x - self.dx, node.y - self.dy, 
                     node.x + self.dx, node.y + self.dy)
@@ -218,6 +222,9 @@ class Solution(object):
         node.best = best_next + node.value
 
 if __name__ == '__main__':
+
+    sys.setrecursionlimit(40000)
+
     nD_latD_long = raw_input().split()
 
     n = int(nD_latD_long[0])
