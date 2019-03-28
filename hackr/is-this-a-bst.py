@@ -7,18 +7,16 @@ class node:
       self.right = None
 
 def check_binary_search_tree_(root):
+    return check_node(root, 10001, -1)
+
+def check_node(node, max_data, min_data):
     if node is None:
         return True
-    return check_node(root)
+    if node.data > max_data or node.data < min_data:
+        return False
 
-def check_node(node):
-    if node is None:
-        return True
-    return check_left(node.left, node.data) \
-        and check_right(node.right, node.data)
+    # new_min = max(node.data, min_data)
+    # new_max = min(node.data, max_data)
 
-def check_left(node, data):
-    return node.data < data and check_node(node)              
-
-def check_right(node, data):
-    return node.data > data and check_node(node)              
+    return check_node(node.left, node.data - 1, min_data) \
+        and check_node(node.right, max_data, node.data + 1)
